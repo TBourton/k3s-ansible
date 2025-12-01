@@ -1,0 +1,19 @@
+---
+- name: Prepare Diet Pi
+  gather_facts: true
+  hosts: all
+  tasks:
+    - name: Install lsb-release package
+      ansible.builtin.apt:
+        name: lsb-release
+        state: present
+
+    - name: Install util-linux-extra package
+      ansible.builtin.apt:
+        name: util-linux-extra
+        state: present
+
+    - name: Install vim package
+      ansible.builtin.apt:
+        name: vim
+        state: present
