@@ -17,3 +17,18 @@
       ansible.builtin.apt:
         name: vim
         state: present
+
+    - name: Install nfs-common package
+      ansible.builtin.apt:
+        name: nfs-common
+        state: present
+
+    - name: Install open-iscsi package
+      ansible.builtin.apt:
+        name: open-iscsi
+        state: present
+
+    - name: Install iotop package
+      ansible.builtin.apt:
+        name: iotop
+        state: present

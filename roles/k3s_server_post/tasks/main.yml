@@ -14,6 +14,10 @@
   tags: metallb
   when: kube_vip_lb_ip_range is not defined and (not cilium_bgp or cilium_iface is not defined)
 
+- name: Install Helm
+  ansible.builtin.include_tasks: helm-install.yml
+  tags: helm
+
 - name: Remove tmp directory used for manifests
   ansible.builtin.file:
     path: /tmp/k3s

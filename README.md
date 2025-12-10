@@ -1,79 +1,172 @@
 # Automated build of HA k3s Cluster with `kube-vip` and MetalLB
 
-![Fully Automated K3S etcd High Availability Install](https://img.youtube.com/vi/CbkEWcUZ7zM/0.jpg)
+Forked from <https://github.com/timothystewart6/k3s-ansible>.
+
+This playbook is used to build my personal home cluster deployed on Raspberry PIs.
 
 This playbook will build an HA Kubernetes cluster with `k3s`, `kube-vip` and MetalLB via `ansible`.
 
-This is based on the work from [this fork](https://github.com/212850a/k3s-ansible) which is based on the work from [k3s-io/k3s-ansible](https://github.com/k3s-io/k3s-ansible). It uses [kube-vip](https://kube-vip.io/) to create a load balancer for control plane, and [metal-lb](https://metallb.universe.tf/installation/) for its service `LoadBalancer`.
+The current settings deploy
+- k3s with embedded etcd on a single master node
+- MetalLB
 
-If you want more context on how this works, see:
+## Setup
 
-📄 [Documentation](https://technotim.live/posts/k3s-etcd-ansible/) (including example commands)
 
-📺 [Watch the Video](https://www.youtube.com/watch?v=CbkEWcUZ7zM)
+Install deps
+```console
+uv venv --python 3.11
+source .venv/bin/activate
 
-## 📖 k3s Ansible Playbook
-
-Build a Kubernetes cluster using Ansible with k3s. The goal is easily install a HA Kubernetes cluster on machines running:
-
-- [x] Debian (tested on version 11)
-- [x] Ubuntu (tested on version 22.04)
-- [x] Rocky (tested on version 9)
-
-on processor architecture:
-
-- [X] x64
-- [X] arm64
-- [X] armhf
-
-## ✅ System requirements
-
-- Control Node (the machine you are running `ansible` commands) must have Ansible 2.11+ If you need a quick primer on Ansible [you can check out my docs and setting up Ansible](https://technotim.live/posts/ansible-automation/).
-
-- You will also need to install collections that this playbook uses by running `ansible-galaxy collection install -r ./collections/requirements.yml` (important❗)
-
-- [`netaddr` package](https://pypi.org/project/netaddr/) must be available to Ansible. If you have installed Ansible via apt, this is already taken care of. If you have installed Ansible via `pip`, make sure to install `netaddr` into the respective virtual environment.
-
-- `server` and `agent` nodes should have passwordless SSH access, if not you can supply arguments to provide credentials `--ask-pass --ask-become-pass` to each command.
-
-## 🚀 Getting Started
-
-### 🍴 Preparation
-
-First create a new directory based on the `sample` directory within the `inventory` directory:
-
-```bash
-cp -R inventory/sample inventory/my-cluster
+uv pip install -r requirements.txt
 ```
 
-Second, edit `inventory/my-cluster/hosts.ini` to match the system information gathered above
+A new directory based on the `sample` directory within the `inventory` directory has been created, under `inventory/my-cluster`.
 
-For example:
 
-```ini
-[master]
-192.168.30.38
-192.168.30.39
-192.168.30.40
+Settings are in `ansible.cfg` with adapted inventory path to match.
 
-[node]
-192.168.30.41
-192.168.30.42
+The `inventory/my-cluster/group_vars/all.yml` has been customised to allow installing embedded ETCD.
 
-[k3s_cluster:children]
-master
-node
+## Prepare Cluster
+
+### Prepare nodes with packages
+<https://github.com/timothystewart6/k3s-ansible/issues/463>
+
+```console
+ansible-playbook prepare-nodes.yml -i inventory/my-cluster/hosts.ini
 ```
 
-If multiple hosts are in the master group, the playbook will automatically set up k3s in [HA mode with etcd](https://rancher.com/docs/k3s/latest/en/installation/ha-embedded/).
+### Prepare Storage
 
-Finally, copy `ansible.example.cfg` to `ansible.cfg` and adapt the inventory path to match the files that you just created.
+Later on we will use longhorn, <https://rpi4cluster.com/k3s-storage-setting/#file-system-and-mount>
 
-This requires at least k3s version `1.19.1` however the version is configurable by using the `k3s_version` variable.
+Here's how disks are currently setup.
 
-If needed, you can also edit `inventory/my-cluster/group_vars/all.yml` to match your environment.
+#### USBs
 
-### ☸️ Create Cluster
+```console
+ansible k3s_cluster -b -m shell -a "lsblk -f"
+```
+
+Verify non-boot disks are sdb, then wipe
+
+```console
+ansible k3s_cluster -b -m shell -a "wipefs -a /dev/sdb"
+ansible k3s_cluster -b -m filesystem -a "fstype=ext4 dev=/dev/sdb"
+```
+
+Get UUIDs
+
+```console
+ansible k3s_cluster -b -m shell -a "blkid -s UUID -o value /dev/sdb"
+```
+
+Mount
+
+```console
+ansible 192.168.1.79 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=66c05758-9efc-46c3-8fbc-3ed0e84ac3b6 fstype=ext4 state=mounted" -b
+
+ansible 192.168.1.109 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=73791edf-80b7-4d11-bd1e-ab3cb99e83b7 fstype=ext4 state=mounted" -b
+
+ansible 192.168.1.177 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=33674496-d90e-40c8-962f-728b4ffb11ca fstype=ext4 state=mounted" -b
+```
+
+
+#### NVME SSD
+
+Currently, only control01 (192.168.1.177) has SSD.
+
+This on I have decided to put on the master. I want to partition it so that we have 64GB for k3s_server to use as data drive and for ETCD.
+Then the rest I will make available to longhorn if there's anything that requires super fast disk.
+
+```console
+ansible k3s_cluster -b -m shell -a "lsblk -f"
+```
+
+```console
+export node=192.168.1.177
+export device=/dev/nvme0n1
+```
+
+Wipe & reformat if needed
+
+```console
+ansible $node -b -m shell -a "wipefs -a $device"
+ansible $node -b -m filesystem -a "fstype=ext4 dev=$device"
+ansible $node -b -m shell -a "lsblk -f"
+```
+
+Partition the SSD
+
+```console
+ansible $node -m shell -a "parted $device --script mklabel gpt" -b
+ansible $node -m shell -a "parted $device --script mkpart k3s ext4 0% 64GB" -b
+ansible $node -m shell -a "parted $device --script mkpart longhorn ext4 64GB 100%" -b
+```
+
+Confirm the partitions with
+```console
+ansible $node -b -m shell -a "lsblk -f"
+```
+
+Then, format the partitions
+```console
+ansible $node -b -m shell -a "wipefs -a /dev/nvme0n1p1"
+ansible $node -b -m shell -a "wipefs -a /dev/nvme0n1p2"
+ansible $node -b -m filesystem -a "fstype=ext4 dev=/dev/nvme0n1p1"
+ansible $node -b -m filesystem -a "fstype=ext4 dev=/dev/nvme0n1p2"
+ansible $node -b -m shell -a "lsblk -f"
+```
+
+Get UUIDs
+
+```console
+ansible $node -b -m shell -a "blkid -s UUID -o value /dev/nvme0n1p1"
+ansible $node -b -m shell -a "blkid -s UUID -o value /dev/nvme0n1p2"
+```
+
+Mount them. We're going to mount the large partition under /mnt/storage02, following what we did for the USBs, meanwhile the k3s partition under `/mnt/k3sdata`
+
+```console
+ansible $node -m ansible.posix.mount -a "path=/mnt/k3sdata src=UUID=1791b0ac-e61e-4ecb-b69d-904ab69fc39a fstype=ext4 state=mounted" -b
+ansible $node -m ansible.posix.mount -a "path=/mnt/storage02 src=UUID=5481387e-a717-4775-99a4-3fb3a59bc531 fstype=ext4 state=mounted" -b
+```
+
+We need to also point --data-dir at this new k3sdata partition.
+
+
+#### USB SSD
+
+I Brought a 1TB SSD to act as media storage for my Plex server.
+It's currently installed in cube02.
+
+
+```console
+ansible k3s_cluster -b -m shell -a "lsblk -f"
+```
+The disk should be sde
+
+```console
+export node=192.168.1.109
+export device=/dev/sde
+ansible $node -b -m shell -a "wipefs -a $device"
+ansible $node -b -m filesystem -a "fstype=ext4 dev=$device"
+```
+
+Get UUID
+
+```console
+ansible $node -b -m shell -a "blkid -s UUID -o value $device"
+```
+
+Mount to /mnt/storage03
+
+```console
+ansible $node -m ansible.posix.mount -a "path=/mnt/storage03 src=UUID=3aa268b0-c8f7-4d68-8a63-a04fc58b4116 fstype=ext4 state=mounted" -b
+```
+
+## ☸️ Create Cluster
 
 Start provisioning of the cluster using the following command:
 
@@ -83,7 +176,7 @@ ansible-playbook site.yml -i inventory/my-cluster/hosts.ini
 
 After deployment control plane will be accessible via virtual ip-address which is defined in inventory/group_vars/all.yml as `apiserver_endpoint`
 
-### 🔥 Remove k3s cluster
+## 🔥 Remove k3s cluster
 
 ```bash
 ansible-playbook reset.yml -i inventory/my-cluster/hosts.ini
@@ -113,81 +206,9 @@ sudo nano ~/.kube/config
 ```
 Then change `server: https://127.0.0.1:6443` to match your master IP: `server: https://192.168.1.222:6443`
 
-### 🔨 Testing your cluster
+## 🔨 Testing your cluster
 
 See the commands [here](https://technotim.live/posts/k3s-etcd-ansible/#testing-your-cluster).
-
-### Variables
-
-| Role(s) | Variable | Type | Default | Required | Description |
-|---|---|---|---|---|---|
-| `download` | `k3s_version` | string | ❌ | Required | K3s binaries version |
-| `k3s_agent`, `k3s_server`, `k3s_server_post` | `apiserver_endpoint` | string | ❌ | Required | Virtual ip-address configured on each master |
-| `k3s_agent` | `extra_agent_args` | string | `null` | Not required | Extra arguments for agents nodes |
-| `k3s_agent`, `k3s_server` | `group_name_master` | string | `null` | Not required | Name othe master group |
-| `k3s_agent` | `k3s_token` | string | `null` | Not required | Token used to communicate between masters |
-| `k3s_agent`, `k3s_server` | `proxy_env` | dict | `null` | Not required | Internet proxy configurations |
-| `k3s_agent`, `k3s_server` | `proxy_env.HTTP_PROXY` | string | ❌ | Required | HTTP internet proxy |
-| `k3s_agent`, `k3s_server` | `proxy_env.HTTPS_PROXY` | string | ❌ | Required | HTTP internet proxy |
-| `k3s_agent`, `k3s_server` | `proxy_env.NO_PROXY` | string | ❌ | Required | Addresses that will not use the proxies |
-| `k3s_agent`, `k3s_server`, `reset` | `systemd_dir` | string | `/etc/systemd/system` | Not required | Path to systemd services |
-| `k3s_custom_registries` | `custom_registries_yaml` | string | ❌ | Required | YAML block defining custom registries. The following is an example that pulls all images used in this playbook through your private registries. It also allows you to pull your own images from your private registry, without having to use imagePullSecrets in your deployments. If all you need is your own images and you don't care about caching the docker/quay/ghcr.io images, you can just remove those from the mirrors: section. |
-| `k3s_server`, `k3s_server_post` | `cilium_bgp` | bool | `~` | Not required | Enable cilium BGP control plane for LB services and pod cidrs. Disables the use of MetalLB. |
-| `k3s_server`, `k3s_server_post` | `cilium_iface` | string | ❌ | Not required | The network interface used for when Cilium is enabled |
-| `k3s_server` | `extra_server_args` | string | `""` | Not required | Extra arguments for server nodes |
-| `k3s_server` | `k3s_create_kubectl_symlink` | bool | `false` | Not required | Create the kubectl -> k3s symlink |
-| `k3s_server` | `k3s_create_crictl_symlink` | bool | `true` | Not required | Create the crictl -> k3s symlink |
-| `k3s_server` | `kube_vip_arp` | bool | `true` | Not required | Enables kube-vip ARP broadcasts |
-| `k3s_server` | `kube_vip_bgp` | bool | `false` | Not required | Enables kube-vip BGP peering |
-| `k3s_server` | `kube_vip_bgp_routerid` | string | `"127.0.0.1"` | Not required | Defines the router ID for the kube-vip BGP server |
-| `k3s_server` | `kube_vip_bgp_as` | string | `"64513"` | Not required | Defines the AS for the kube-vip BGP server |
-| `k3s_server` | `kube_vip_bgp_peeraddress` | string | `"192.168.30.1"` | Not required | Defines the address for the kube-vip BGP peer |
-| `k3s_server` | `kube_vip_bgp_peeras` | string | `"64512"` | Not required | Defines the AS for the kube-vip BGP peer |
-| `k3s_server` | `kube_vip_bgp_peers` | list | `[]` | Not required | List of BGP peer ASN & address pairs |
-| `k3s_server` | `kube_vip_bgp_peers_groups` | list | `['k3s_master']` | Not required | Inventory group in which to search for additional `kube_vip_bgp_peers` parameters to merge. |
-| `k3s_server` | `kube_vip_iface` | string | `~` | Not required | Explicitly define an interface that ALL control nodes should use to propagate the VIP, define it here. Otherwise, kube-vip will determine the right interface automatically at runtime. |
-| `k3s_server` | `kube_vip_tag_version` | string | `v0.7.2` | Not required | Image tag for kube-vip |
-| `k3s_server` | `kube_vip_cloud_provider_tag_version` | string | `main` | Not required | Tag for kube-vip-cloud-provider manifest when enable |
-| `k3s_server`, `k3_server_post` | `kube_vip_lb_ip_range` | string | `~` | Not required | IP range for kube-vip load balancer |
-| `k3s_server`, `k3s_server_post` | `metal_lb_controller_tag_version` | string | `v0.14.3` | Not required | Image tag for MetalLB |
-| `k3s_server` | `metal_lb_speaker_tag_version` | string | `v0.14.3` | Not required | Image tag for MetalLB |
-| `k3s_server` | `metal_lb_type` | string | `native` | Not required | Use FRR mode or native. Valid values are `frr` and `native` |
-| `k3s_server` | `retry_count` | int | `20` | Not required | Amount of retries when verifying that nodes joined |
-| `k3s_server` | `server_init_args` | string | ❌ | Not required | Arguments for server nodes |
-| `k3s_server_post` | `bpf_lb_algorithm` | string | `maglev` | Not required | BPF lb algorithm |
-| `k3s_server_post` | `bpf_lb_mode` | string | `hybrid` | Not required | BPF lb mode |
-| `k3s_server_post` | `calico_blocksize` | int | `26` | Not required | IP pool block size |
-| `k3s_server_post` | `calico_ebpf` | bool | `false` | Not required | Use eBPF dataplane instead of iptables |
-| `k3s_server_post` | `calico_encapsulation` | string | `VXLANCrossSubnet` | Not required | IP pool encapsulation |
-| `k3s_server_post` | `calico_natOutgoing` | string | `Enabled` | Not required | IP pool NAT outgoing |
-| `k3s_server_post` | `calico_nodeSelector` | string | `all()` | Not required | IP pool node selector |
-| `k3s_server_post` | `calico_iface` | string | `~` | Not required | The network interface used for when Calico is enabled |
-| `k3s_server_post` | `calico_tag` | string | `v3.27.2` | Not required | Calico version tag |
-| `k3s_server_post` | `cilium_bgp_my_asn` | int | `64513` | Not required | Local ASN for BGP peer |
-| `k3s_server_post` | `cilium_bgp_peer_asn` | int | `64512` | Not required | BGP peer ASN |
-| `k3s_server_post` | `cilium_bgp_peer_address` | string | `~` | Not required | BGP peer address |
-| `k3s_server_post` | `cilium_bgp_neighbors` | list | `[]` | Not required | List of BGP peer ASN & address pairs |
-| `k3s_server_post` | `cilium_bgp_neighbors_groups` | list | `['k3s_all']` | Not required | Inventory group in which to search for additional `cilium_bgp_neighbors` parameters to merge. |
-| `k3s_server_post` | `cilium_bgp_lb_cidr` | string | `192.168.31.0/24` | Not required | BGP load balancer IP range |
-| `k3s_server_post` | `cilium_exportPodCIDR` | bool | `true` | Not required | Export pod CIDR |
-| `k3s_server_post` | `cilium_hubble` | bool | `true` | Not required | Enable Cilium Hubble |
-| `k3s_server_post` | `cilium_hubble` | bool | `true` | Not required | Enable Cilium Hubble |
-| `k3s_server_post` | `cilium_mode` | string | `native` | Not required | Inner-node communication mode (choices are `native` and `routed`) |
-| `k3s_server_post` | `cluster_cidr` | string | `10.52.0.0/16` | Not required | Inner-cluster IP range |
-| `k3s_server_post` | `enable_bpf_masquerade` | bool | `true` | Not required | Use IP masquerading |
-| `k3s_server_post` | `kube_proxy_replacement` | bool | `true` | Not required | Replace the native kube-proxy with Cilium |
-| `k3s_server_post` | `metal_lb_available_timeout` | string | `240s` | Not required | Wait for MetalLB resources |
-| `k3s_server_post` | `metal_lb_ip_range` | string | `192.168.30.80-192.168.30.90` | Not required | MetalLB ip range for load balancer |
-| `k3s_server_post` | `metal_lb_controller_tag_version` | string | `v0.14.3` | Not required | Image tag for MetalLB |
-| `k3s_server_post` | `metal_lb_mode` | string | `layer2` | Not required | Metallb mode (choices are `bgp` and `layer2`) |
-| `k3s_server_post` | `metal_lb_bgp_my_asn` | string | `~` | Not required | BGP ASN configurations |
-| `k3s_server_post` | `metal_lb_bgp_peer_asn` | string | `~` | Not required | BGP peer ASN configurations |
-| `k3s_server_post` | `metal_lb_bgp_peer_address` | string | `~` | Not required | BGP peer address |
-| `lxc` | `custom_reboot_command` | string | `~` | Not required | Command to run on reboot |
-| `prereq` | `system_timezone` | string | `null` | Not required | Timezone to be set on all nodes |
-| `proxmox_lxc`, `reset_proxmox_lxc` | `proxmox_lxc_ct_ids` | list | ❌ | Required | Proxmox container ID list |
-| `raspberrypi` | `state` | string | `present` | Not required | Indicates whether the k3s prerequisites for Raspberry Pi should be set up (possible values are `present` and `absent`) |
-
 
 ### Troubleshooting
 
