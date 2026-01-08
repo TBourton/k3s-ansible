@@ -1,0 +1,11 @@
+---
+- name: Manage node labels
+  gather_facts: true
+  hosts: all
+  tasks:
+   - name: Set add node labels
+     ansible.builtin.command: kubectl label node --overwrite {{ inventory_hostname }} {{ item }}
+     delegate_to: localhost
+     loop: "{{ node_labels }}"
+     when: node_labels is defined
+     changed_when: true

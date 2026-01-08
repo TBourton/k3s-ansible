@@ -34,7 +34,7 @@ The `inventory/my-cluster/group_vars/all.yml` has been customised to allow insta
 <https://github.com/timothystewart6/k3s-ansible/issues/463>
 
 ```console
-ansible-playbook prepare-nodes.yml -i inventory/my-cluster/hosts.ini
+ansible-playbook prepare-nodes.yml -i inventory/my-cluster/hosts.yml
 ```
 
 ### Prepare Storage
@@ -166,12 +166,18 @@ Mount to /mnt/storage03
 ansible $node -m ansible.posix.mount -a "path=/mnt/storage03 src=UUID=3aa268b0-c8f7-4d68-8a63-a04fc58b4116 fstype=ext4 state=mounted" -b
 ```
 
+### Apply Node Labels
+
+```console
+ansible-playbook label-nodes.yaml -i inventory/my-cluster/hosts.yml
+```
+
 ## ☸️ Create Cluster
 
 Start provisioning of the cluster using the following command:
 
 ```bash
-ansible-playbook site.yml -i inventory/my-cluster/hosts.ini
+ansible-playbook site.yml -i inventory/my-cluster/hosts.yml
 ```
 
 After deployment control plane will be accessible via virtual ip-address which is defined in inventory/group_vars/all.yml as `apiserver_endpoint`
@@ -179,7 +185,7 @@ After deployment control plane will be accessible via virtual ip-address which i
 ## 🔥 Remove k3s cluster
 
 ```bash
-ansible-playbook reset.yml -i inventory/my-cluster/hosts.ini
+ansible-playbook reset.yml -i inventory/my-cluster/hosts.yml
 ```
 
 >You should also reboot these nodes due to the VIP not being destroyed

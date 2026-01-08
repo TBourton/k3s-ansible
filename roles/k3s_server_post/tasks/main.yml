@@ -16,7 +16,6 @@
 
 - name: Install Helm
   ansible.builtin.include_tasks: helm-install.yml
-  tags: helm
 
 - name: Remove tmp directory used for manifests
   ansible.builtin.file:

@@ -3,3 +3,5 @@
 ansible.cfg
 kubeconfig
 .ansible/
+*.img
+dietpi/password.txt
