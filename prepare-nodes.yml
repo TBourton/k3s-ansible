@@ -1,6 +1,7 @@
 ---
-- name: Prepare Diet Pi
+- name: Prepare apt packages
   gather_facts: true
+  become: true
   hosts: all
   tasks:
     - name: Install lsb-release package
@@ -32,3 +33,32 @@
       ansible.builtin.apt:
         name: iotop
         state: present
+
+    - name: Install curl package
+      ansible.builtin.apt:
+        name: curl
+        state: present
+
+- name: Install Tailscale
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Download Tailscale installation script
+      ansible.builtin.get_url:
+        url: https://tailscale.com/install.sh
+        dest: /tmp/k3s/install_tailscale.sh
+        mode: '0755'
+
+    - name: Run Tailscale installation script
+      ansible.builtin.command: /tmp/k3s/install_tailscale.sh
+      args:
+        creates: /usr/sbin/tailscaled
+      register: tailscale_install_result
+      changed_when: false
+
+    - name: Enable and start tailscaled
+      ansible.builtin.systemd:
+        name: tailscaled
+        enabled: true
+        state: started

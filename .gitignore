@@ -5,3 +5,4 @@ kubeconfig
 .ansible/
 *.img
 dietpi/password.txt
+.vscode/

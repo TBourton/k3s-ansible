@@ -11,17 +11,18 @@ repos:
       - id: mixed-line-ending
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
     hooks:
       - id: yamllint
-        args: [-c=.yamllint]
+        args: [-c=.yamllint.yaml]
   - repo: https://github.com/ansible-community/ansible-lint.git
     rev: v25.11.1
     hooks:
       - id: ansible-lint
         additional_dependencies:
-          - ansible-core~=2.18.0  # Should be the same as that in requirements.txt
+          - ansible-core~=2.18.0 # Should be the same as that in requirements.txt
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:

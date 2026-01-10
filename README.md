@@ -7,13 +7,14 @@ This playbook is used to build my personal home cluster deployed on Raspberry PI
 This playbook will build an HA Kubernetes cluster with `k3s`, `kube-vip` and MetalLB via `ansible`.
 
 The current settings deploy
+
 - k3s with embedded etcd on a single master node
 - MetalLB
 
 ## Setup
 
-
 Install deps
+
 ```console
 uv venv --python 3.11
 source .venv/bin/activate
@@ -23,14 +24,23 @@ uv pip install -r requirements.txt
 
 A new directory based on the `sample` directory within the `inventory` directory has been created, under `inventory/my-cluster`.
 
-
 Settings are in `ansible.cfg` with adapted inventory path to match.
 
 The `inventory/my-cluster/group_vars/all.yml` has been customised to allow installing embedded ETCD.
 
 ## Prepare Cluster
 
+First, copy over ssh key
+
+```console
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@control01
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@cube02
+...
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@cubexx
+```
+
 ### Prepare nodes with packages
+
 <https://github.com/timothystewart6/k3s-ansible/issues/463>
 
 ```console
@@ -43,23 +53,25 @@ Later on we will use longhorn, <https://rpi4cluster.com/k3s-storage-setting/#fil
 
 Here's how disks are currently setup.
 
-#### USBs
+#### RPis
+
+##### USBs
 
 ```console
-ansible k3s_cluster -b -m shell -a "lsblk -f"
+ansible rpi -b -m shell -a "lsblk -f"
 ```
 
 Verify non-boot disks are sdb, then wipe
 
 ```console
-ansible k3s_cluster -b -m shell -a "wipefs -a /dev/sdb"
-ansible k3s_cluster -b -m filesystem -a "fstype=ext4 dev=/dev/sdb"
+ansible rpi -b -m shell -a "wipefs -a /dev/sdb"
+ansible rpi -b -m filesystem -a "fstype=ext4 dev=/dev/sdb"
 ```
 
 Get UUIDs
 
 ```console
-ansible k3s_cluster -b -m shell -a "blkid -s UUID -o value /dev/sdb"
+ansible rpi -b -m shell -a "blkid -s UUID -o value /dev/sdb"
 ```
 
 Mount
@@ -72,8 +84,7 @@ ansible 192.168.1.109 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=73
 ansible 192.168.1.177 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=33674496-d90e-40c8-962f-728b4ffb11ca fstype=ext4 state=mounted" -b
 ```
 
-
-#### NVME SSD
+##### NVME SSD
 
 Currently, only control01 (192.168.1.177) has SSD.
 
@@ -81,7 +92,7 @@ This on I have decided to put on the master. I want to partition it so that we h
 Then the rest I will make available to longhorn if there's anything that requires super fast disk.
 
 ```console
-ansible k3s_cluster -b -m shell -a "lsblk -f"
+ansible rpi -b -m shell -a "lsblk -f"
 ```
 
 ```console
@@ -106,11 +117,13 @@ ansible $node -m shell -a "parted $device --script mkpart longhorn ext4 64GB 100
 ```
 
 Confirm the partitions with
+
 ```console
 ansible $node -b -m shell -a "lsblk -f"
 ```
 
 Then, format the partitions
+
 ```console
 ansible $node -b -m shell -a "wipefs -a /dev/nvme0n1p1"
 ansible $node -b -m shell -a "wipefs -a /dev/nvme0n1p2"
@@ -135,16 +148,14 @@ ansible $node -m ansible.posix.mount -a "path=/mnt/storage02 src=UUID=5481387e-a
 
 We need to also point --data-dir at this new k3sdata partition.
 
+##### USB SSD
 
-#### USB SSD
-
-I Brought a 1TB SSD to act as media storage for my Plex server.
-It's currently installed in cube02.
-
+I Brought a 1TB SSD to act as additional storage, it's currently installed in cube02.
 
 ```console
-ansible k3s_cluster -b -m shell -a "lsblk -f"
+ansible rpi -b -m shell -a "lsblk -f"
 ```
+
 The disk should be sde
 
 ```console
@@ -166,10 +177,28 @@ Mount to /mnt/storage03
 ansible $node -m ansible.posix.mount -a "path=/mnt/storage03 src=UUID=3aa268b0-c8f7-4d68-8a63-a04fc58b4116 fstype=ext4 state=mounted" -b
 ```
 
-### Apply Node Labels
+#### x86
+
+I added some old x86 linux machines in. These with the OS i partiton the HDDs into a 32GB boot partition. The rest we want to use for longhorn storage. The partition for data is then `/dev/sda2`
 
 ```console
-ansible-playbook label-nodes.yaml -i inventory/my-cluster/hosts.yml
+ansible x86 -b -m shell -a "lsblk -f"
+```
+
+Get UUIDs
+
+```console
+ansible x86 -b -m shell -a "blkid -s UUID -o value /dev/sda2"
+```
+
+Mount
+
+```console
+ansible cube04 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=3e43d753-6398-41f5-9f25-5bd479378606 fstype=ext4 state=mounted" -b
+
+ansible cube05 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=878139eb-6cb4-4c08-bbb6-83fefaa2736d fstype=ext4 state=mounted" -b
+
+ansible cube06 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=7ccf0e05-f26f-43de-97a2-43a36445099c fstype=ext4 state=mounted" -b
 ```
 
 ## ☸️ Create Cluster
@@ -181,6 +210,20 @@ ansible-playbook site.yml -i inventory/my-cluster/hosts.yml
 ```
 
 After deployment control plane will be accessible via virtual ip-address which is defined in inventory/group_vars/all.yml as `apiserver_endpoint`
+
+### Apply Node Labels
+
+```console
+ansible-playbook label-nodes.yaml -i inventory/my-cluster/hosts.yml
+```
+
+### Add New Nodes
+
+If the task is to simply add new nodes we can use the [limit option](https://docs.ansible.com/projects/ansible/latest/inventory_guide/intro_patterns.html#patterns-and-ad-hoc-commands). E.g.
+
+```console
+ansible-playbook site.yml -i inventory/my-cluster/hosts.yml --limit "host1,host2"
+```
 
 ## 🔥 Remove k3s cluster
 
@@ -197,19 +240,25 @@ To copy your `kube config` locally so that you can access your **Kubernetes** cl
 ```bash
 scp debian@master_ip:/etc/rancher/k3s/k3s.yaml ~/.kube/config
 ```
+
 If you get file Permission denied, go into the node and temporarly run:
+
 ```bash
 sudo chmod 777 /etc/rancher/k3s/k3s.yaml
 ```
+
 Then copy with the scp command and reset the permissions back to:
+
 ```bash
 sudo chmod 600 /etc/rancher/k3s/k3s.yaml
 ```
 
 You'll then want to modify the config to point to master IP by running:
+
 ```bash
 sudo nano ~/.kube/config
 ```
+
 Then change `server: https://127.0.0.1:6443` to match your master IP: `server: https://192.168.1.222:6443`
 
 ## 🔨 Testing your cluster
