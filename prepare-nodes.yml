@@ -39,6 +39,12 @@
         name: curl
         state: present
 
+    - name: Install cryptsetup package
+      ansible.builtin.apt:
+        name: cryptsetup
+        state: present
+
+
 - name: Install Tailscale
   hosts: all
   gather_facts: true
