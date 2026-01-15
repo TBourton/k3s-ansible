@@ -1,0 +1,18 @@
+[project]
+name="k3s-ansible"
+version="0.1.0"
+description="Install k3s via ansible"
+readme="README.md"
+requires-python=">=3.11"
+dependencies=[
+    "ansible-core~=2.16",
+    "jmespath~=1.0",
+    "jsonpatch>=1.33",
+    "kubernetes>=29.0.0",
+    "molecule-plugins[vagrant]",
+    "molecule>=6.0.3",
+    "netaddr>=0.10.1",
+    "pyyaml~=6.0",
+    "prek~=0.2.24",
+    "yamllint~=1.37",
+]

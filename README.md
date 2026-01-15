@@ -16,10 +16,8 @@ The current settings deploy
 Install deps
 
 ```console
-uv venv --python 3.11
+uv sync
 source .venv/bin/activate
-
-uv pip install -r requirements.txt
 ```
 
 A new directory based on the `sample` directory within the `inventory` directory has been created, under `inventory/my-cluster`.
@@ -148,38 +146,9 @@ ansible $node -m ansible.posix.mount -a "path=/mnt/storage02 src=UUID=5481387e-a
 
 We need to also point --data-dir at this new k3sdata partition.
 
-##### USB SSD
-
-I Brought a 1TB SSD to act as additional storage, it's currently installed in cube02.
-
-```console
-ansible rpi -b -m shell -a "lsblk -f"
-```
-
-The disk should be sde
-
-```console
-export node=192.168.1.109
-export device=/dev/sde
-ansible $node -b -m shell -a "wipefs -a $device"
-ansible $node -b -m filesystem -a "fstype=ext4 dev=$device"
-```
-
-Get UUID
-
-```console
-ansible $node -b -m shell -a "blkid -s UUID -o value $device"
-```
-
-Mount to /mnt/storage03
-
-```console
-ansible $node -m ansible.posix.mount -a "path=/mnt/storage03 src=UUID=3aa268b0-c8f7-4d68-8a63-a04fc58b4116 fstype=ext4 state=mounted" -b
-```
-
 #### x86
 
-I added some old x86 linux machines in. These with the OS i partiton the HDDs into a 32GB boot partition. The rest we want to use for longhorn storage. The partition for data is then `/dev/sda2`
+I added some old x86 linux machines in. These have HDD/SSD and have a 32GB boot partition. The rest we want to use for longhorn storage. The partition for data is then `/dev/sda2`
 
 ```console
 ansible x86 -b -m shell -a "lsblk -f"

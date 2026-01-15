@@ -5,13 +5,13 @@ repos:
     hooks:
       - id: requirements-txt-fixer
       - id: sort-simple-yaml
+      - id: check-added-large-files
       - id: detect-private-key
       - id: check-merge-conflict
       - id: end-of-file-fixer
       - id: mixed-line-ending
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-
   - repo: https://github.com/adrienverge/yamllint.git
     rev: v1.37.1
     hooks:
