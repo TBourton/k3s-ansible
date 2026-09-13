@@ -1,6 +1,5 @@
 .env/
 *.log
-ansible.cfg
 kubeconfig
 .ansible/
 *.img

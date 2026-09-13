@@ -20,6 +20,12 @@ uv sync
 source .venv/bin/activate
 ```
 
+Install ansible-galaxy deps
+
+```console
+ansible-galaxy collection install -r ./collections/requirements.yml
+```
+
 A new directory based on the `sample` directory within the `inventory` directory has been created, under `inventory/my-cluster`.
 
 Settings are in `ansible.cfg` with adapted inventory path to match.
@@ -75,16 +81,16 @@ ansible rpi -b -m shell -a "blkid -s UUID -o value /dev/sdb"
 Mount
 
 ```console
-ansible 192.168.1.79 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=66c05758-9efc-46c3-8fbc-3ed0e84ac3b6 fstype=ext4 state=mounted" -b
+ansible cube03 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=66c05758-9efc-46c3-8fbc-3ed0e84ac3b6 fstype=ext4 state=mounted" -b
 
-ansible 192.168.1.109 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=73791edf-80b7-4d11-bd1e-ab3cb99e83b7 fstype=ext4 state=mounted" -b
+ansible cube02 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=73791edf-80b7-4d11-bd1e-ab3cb99e83b7 fstype=ext4 state=mounted" -b
 
-ansible 192.168.1.177 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=33674496-d90e-40c8-962f-728b4ffb11ca fstype=ext4 state=mounted" -b
+ansible control01 -m ansible.posix.mount -a "path=/mnt/storage01 src=UUID=33674496-d90e-40c8-962f-728b4ffb11ca fstype=ext4 state=mounted" -b
 ```
 
 ##### NVME SSD
 
-Currently, only control01 (192.168.1.177) has SSD.
+Currently, only control01 (192.168.0.177) has SSD.
 
 This on I have decided to put on the master. I want to partition it so that we have 64GB for k3s_server to use as data drive and for ETCD.
 Then the rest I will make available to longhorn if there's anything that requires super fast disk.
@@ -94,7 +100,7 @@ ansible rpi -b -m shell -a "lsblk -f"
 ```
 
 ```console
-export node=192.168.1.177
+export node=control01
 export device=/dev/nvme0n1
 ```
 
@@ -137,10 +143,12 @@ ansible $node -b -m shell -a "blkid -s UUID -o value /dev/nvme0n1p1"
 ansible $node -b -m shell -a "blkid -s UUID -o value /dev/nvme0n1p2"
 ```
 
-Mount them. We're going to mount the large partition under /mnt/storage02, following what we did for the USBs, meanwhile the k3s partition under `/mnt/k3sdata`
+Mount them. We're going to mount the large partition under `/mnt/storage02`, following what we did for the USBs, meanwhile the k3s partition under `/mnt/k3sdata`. We also mount that to `/var/lib/rancher/k3s` in order to be compatible the default value for the path <https://docs.k3s.io/cli/server#data>
 
 ```console
 ansible $node -m ansible.posix.mount -a "path=/mnt/k3sdata src=UUID=1791b0ac-e61e-4ecb-b69d-904ab69fc39a fstype=ext4 state=mounted" -b
+ansible $node -m ansible.posix.mount -a "path=/var/lib/rancher/k3s src=UUID=1791b0ac-e61e-4ecb-b69d-904ab69fc39a fstype=ext4 state=mounted" -b
+
 ansible $node -m ansible.posix.mount -a "path=/mnt/storage02 src=UUID=5481387e-a717-4775-99a4-3fb3a59bc531 fstype=ext4 state=mounted" -b
 ```
 
@@ -228,7 +236,7 @@ You'll then want to modify the config to point to master IP by running:
 sudo nano ~/.kube/config
 ```
 
-Then change `server: https://127.0.0.1:6443` to match your master IP: `server: https://192.168.1.222:6443`
+Then change `server: https://127.0.0.1:6443` to match your master IP: `server: https://192.168.0.222:6443`
 
 ## 🔨 Testing your cluster
 

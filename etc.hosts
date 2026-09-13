@@ -1,0 +1,10 @@
+192.168.0.177   control01
+192.168.0.109   cube02
+192.168.0.79    cube03
+192.168.0.252   cube04
+192.168.0.139   cube05
+192.168.0.191   cube06
+
+192.168.0.200 cube.local homepage.cube.local argocd.cube.local longhorn.cube.local minio.cube.local minio-browser.cube.local dex.cube.local pi.hole.cube.local portainer.cube.local plex.cube.local uptime-kuma.cube.local gatus.cube.local blocky.cube.local blocky-ui.cube.local traefik.cube.local
+
+192.168.0.200 tb-lab.fyi jellyfin.tb-lab.fyi homepage.tb-lab.fyi argocd.tb-lab.fyi longhorn.tb-lab.fyi minio.tb-lab.fyi minio-browser.tb-lab.fyi dex.tb-lab.fyi portainer.tb-lab.fyi blocky.tb-lab.fyi blocky-ui.tb-lab.fyi traefik.tb-lab.fyi

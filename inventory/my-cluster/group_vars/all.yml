@@ -47,7 +47,7 @@ kube_vip_bgp_peeraddress: "192.168.30.1"  # Defines the address for the BGP peer
 kube_vip_bgp_peeras: "64512"  # Defines the AS for the BGP peer
 
 # apiserver_endpoint is virtual ip-address which will be configured on each master
-apiserver_endpoint: 192.168.1.177  # Set equal to master IP
+apiserver_endpoint: 192.168.0.177  # Set equal to master IP
 
 # k3s_token is required  masters can talk together securely
 # this token should be alpha numeric only
@@ -119,7 +119,7 @@ metal_lb_speaker_tag_version: v0.14.8
 metal_lb_controller_tag_version: v0.14.8
 
 # metallb ip range for load balancer
-metal_lb_ip_range: 192.168.1.200-192.168.1.220
+metal_lb_ip_range: 192.168.0.200-192.168.0.220
 
 # Only enable if your nodes are proxmox LXC nodes, make sure to configure your proxmox nodes
 # in your hosts.ini file.

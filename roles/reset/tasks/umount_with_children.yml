@@ -1,5 +1,5 @@
 ---
-- name: Get the list of mounted filesystems
+- name: Get the list of mounted filesystems {{ mounted_fs }}
   ansible.builtin.shell: set -o pipefail && cat /proc/mounts | awk '{ print $2}' | grep -E "^{{ mounted_fs }}"
   register: get_mounted_filesystems
   args:
