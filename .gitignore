@@ -5,3 +5,4 @@ kubeconfig
 *.img
 dietpi/password.txt
 .vscode/
+uv.lock

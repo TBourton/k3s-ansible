@@ -37,7 +37,7 @@ AUTO_SETUP_NET_WIFI_COUNTRY_CODE=GB
 
 # Enter your static network details below, if applicable.
 AUTO_SETUP_NET_USESTATIC=1
-AUTO_SETUP_NET_STATIC_IP=192.168.0.201
+AUTO_SETUP_NET_STATIC_IP=192.168.0.109
 AUTO_SETUP_NET_STATIC_MASK=255.255.255.0
 AUTO_SETUP_NET_STATIC_GATEWAY=192.168.0.1
 AUTO_SETUP_NET_STATIC_DNS=1.1.1.1 8.8.8.8
@@ -46,7 +46,7 @@ AUTO_SETUP_NET_STATIC_DNS=1.1.1.1 8.8.8.8
 AUTO_SETUP_DHCP_TO_STATIC=0
 
 # Hostname
-AUTO_SETUP_NET_HOSTNAME=control01
+AUTO_SETUP_NET_HOSTNAME=cube02
 
 # Force Ethernet speeds: 0=automatic speed | 10 = 10 Mbit/s | 100 = 100 Mbit/s etc.
 # - Use this when your Ethernet adapter has an unstable 1 Gbit/s link.
