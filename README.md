@@ -4,7 +4,8 @@ Forked from <https://github.com/timothystewart6/k3s-ansible>.
 
 This playbook is used to build my personal home cluster deployed on Raspberry PIs.
 
-This playbook will build an HA Kubernetes cluster with `k3s`, `kube-vip` and MetalLB via `ansible`.
+This Ansible collection builds a highly available Kubernetes cluster with k3s. It supports kube-vip for the control
+plane virtual IP, multiple CNI options, and either MetalLB or kube-vip for service load balancing.
 
 The current settings deploy
 
@@ -12,6 +13,9 @@ The current settings deploy
 - MetalLB
 
 ## Setup
+For more context on how it works, see:
+
+📄 [Documentation](https://technotim.com/posts/k3s-etcd-ansible/) (including example commands)
 
 Install deps
 
@@ -21,6 +25,60 @@ source .venv/bin/activate
 ```
 
 Install ansible-galaxy deps
+## Project guides
+
+- [Getting started](#-getting-started)
+- [Configuration variables](#variables)
+- [Upgrading an existing cluster](#-upgrading-an-existing-cluster)
+- [Local Molecule testing](molecule/README.md)
+- [Contributing guidelines](CONTRIBUTING.md)
+- [Repository guide for coding agents](AGENTS.md)
+
+## 📖 k3s Ansible Playbook
+
+Build a Kubernetes cluster using Ansible and k3s. The goal is to make a highly available cluster straightforward to
+install on machines running:
+
+- [x] Debian (tested on version 13)
+- [x] Ubuntu (tested on version 26.04 LTS)
+- [x] Rocky (tested on version 10)
+
+Supported processor architectures are:
+
+- [x] x64
+- [x] arm64
+- [x] armhf
+
+## ✅ System requirements
+
+- The control node, which runs the Ansible commands, must have Ansible 2.11 or newer. For a quick primer, see
+  [setting up Ansible](https://technotim.com/posts/ansible-automation/).
+
+- Install the required collections with
+  `ansible-galaxy collection install -r ./collections/requirements.yml`.
+
+- [`netaddr` package](https://pypi.org/project/netaddr/) must be available to Ansible. If you have installed Ansible via apt, this is already taken care of. If you have installed Ansible via `pip`, make sure to install `netaddr` into the respective virtual environment.
+
+- Server and agent nodes should support passwordless SSH access. Otherwise, pass `--ask-pass --ask-become-pass` to
+  each playbook command.
+
+- Every node in the cluster must have a **unique hostname**. k3s registers each node keyed by its hostname, so
+  two nodes with the same hostname cannot join the cluster. `site.yml` asserts this up front and fails fast if
+  any duplicate is found.
+
+## 🚀 Getting Started
+
+### 🍴 Preparation
+
+Create a cluster-specific inventory from the sample. The `inventory/` directory ignores custom inventory content so
+credentials and environment details aren't committed accidentally.
+
+```bash
+cp -R inventory/sample inventory/my-cluster
+```
+
+Edit `inventory/my-cluster/hosts.ini` to match the target hosts.
+>>>>>>> upstream/master
 
 ```console
 ansible-galaxy collection install -r ./collections/requirements.yml
@@ -31,6 +89,8 @@ A new directory based on the `sample` directory within the `inventory` directory
 Settings are in `ansible.cfg` with adapted inventory path to match.
 
 The `inventory/my-cluster/group_vars/all.yml` has been customised to allow installing embedded ETCD.
+
+The minimum k3s version is `1.19.1`. Select the desired version with the `k3s_version` variable.
 
 ## Prepare Cluster
 
@@ -186,7 +246,8 @@ Start provisioning of the cluster using the following command:
 ansible-playbook site.yml -i inventory/my-cluster/hosts.yml
 ```
 
-After deployment control plane will be accessible via virtual ip-address which is defined in inventory/group_vars/all.yml as `apiserver_endpoint`
+After deployment, the control plane is accessible through the virtual IP defined by `apiserver_endpoint` in the
+inventory variables.
 
 ### Apply Node Labels
 
@@ -208,7 +269,51 @@ ansible-playbook site.yml -i inventory/my-cluster/hosts.yml --limit "host1,host2
 ansible-playbook reset.yml -i inventory/my-cluster/hosts.yml
 ```
 
->You should also reboot these nodes due to the VIP not being destroyed
+> Reboot the nodes after reset because the virtual IP may remain configured.
+
+### ⏻️ Reboot Cluster Nodes
+
+Reboot all cluster nodes at once or stage the reboot across the cluster.
+
+```bash
+ansible-playbook reboot.yml -i inventory/my-cluster/hosts.ini
+```
+
+To reboot the nodes in batches, set `concurrent_reboots` to the number of nodes
+to reboot at a time (or a percentage). Optionally set `wait_seconds_after_reboot`
+to pause after each batch so pods in the freshly rebooted batch can settle
+before the next batch reboots.
+
+```bash
+ansible-playbook reboot.yml -i inventory/my-cluster/hosts.ini \
+  --extra-vars 'concurrent_reboots=2 wait_seconds_after_reboot=30'
+```
+
+## 🔁 Upgrading an existing cluster
+
+These version variables select the components used for a **fresh** installation.
+They are not a supported direct in-place upgrade path for an existing cluster.
+K3s, Calico, and Cilium each require staged upgrades for long-lived clusters.
+
+- **K3s**: do not jump an embedded-etcd cluster straight to Kubernetes 1.36.
+  Upgrade one Kubernetes minor version at a time. From the sample default
+  (`v1.30.2+k3s2`) the sequence is: the latest supported 1.30 patch, then 1.31,
+  1.32, a 1.33 patch that contains etcd 3.5.26 (for example `v1.33.7+k3s3`),
+  then 1.34, 1.35, and finally 1.36. Upgrade servers one at a time before
+  agents. Take backups and confirm cluster health at each step; this playbook
+  does not automate the upgrade, so those remain manual operational steps. See
+  [K3s manual upgrades](https://docs.k3s.io/upgrades/manual) and the
+  [v1.34 release notes](https://docs.k3s.io/release-notes/v1.34.X).
+- **Cilium**: upstream supports only consecutive minor upgrades. Update to the
+  latest patch of the current minor, then upgrade 1.17, 1.18, 1.19, and 1.20 in
+  order, reading each version's upgrade notes and running preflight checks.
+  Do not attempt a direct upgrade from an old Cilium to 1.20.
+- **Calico**: starting with 3.28 the v3 resource UID behavior changed. If you
+  have operators with OwnerReferences pointing to `projectcalico.org/v3`
+  resources, remove and recreate those references around an in-place upgrade.
+- **MetalLB**: this project installs application tag `v0.16.0`. A newer
+  chart-only tag such as `metallb-chart-0.16.1` is not an application or image
+  release and must not be used as the controller or speaker image tag.
 
 ## ⚙️ Kube Config
 
@@ -219,15 +324,21 @@ scp debian@master_ip:/etc/rancher/k3s/k3s.yaml ~/.kube/config
 ```
 
 If you get file Permission denied, go into the node and temporarly run:
+If the copy fails with a permission error, grant the SSH user temporary read access using the least permissive method
+available for the target system. Restore the original ownership and permissions immediately after copying. Avoid
+world-writable permissions on the kubeconfig because it contains cluster credentials.
+
+For example, copy the file to a temporary user-readable path from the control node:
 
 ```bash
-sudo chmod 777 /etc/rancher/k3s/k3s.yaml
+ssh debian@master_ip 'sudo install -o "$(id -un)" -m 0600 /etc/rancher/k3s/k3s.yaml /tmp/k3s.yaml'
 ```
 
-Then copy with the scp command and reset the permissions back to:
+Copy `/tmp/k3s.yaml`, then remove the temporary remote copy:
 
 ```bash
-sudo chmod 600 /etc/rancher/k3s/k3s.yaml
+scp debian@master_ip:/tmp/k3s.yaml ~/.kube/config
+ssh debian@master_ip rm -f /tmp/k3s.yaml
 ```
 
 You'll then want to modify the config to point to master IP by running:
@@ -240,7 +351,7 @@ Then change `server: https://127.0.0.1:6443` to match your master IP: `server: h
 
 ## 🔨 Testing your cluster
 
-See the commands [here](https://technotim.live/posts/k3s-etcd-ansible/#testing-your-cluster).
+See the commands [here](https://technotim.com/posts/k3s-etcd-ansible/#testing-your-cluster).
 
 ### Troubleshooting
 
@@ -253,9 +364,11 @@ It is run automatically in CI, but you can also run the tests locally.
 This might be helpful for quick feedback in a few cases.
 You can find more information about it [here](molecule/README.md).
 
-### Pre-commit Hooks
+### Pre-commit hooks
 
-This repo uses `pre-commit` and `pre-commit-hooks` to lint and fix common style and syntax errors.  Be sure to install python packages and then run `pre-commit install`.  For more information, see [pre-commit](https://pre-commit.com/)
+This repository uses `pre-commit` to check style, syntax, Ansible content, and shell scripts. Install the Python
+dependencies, run `pre-commit install` once, and run `pre-commit run --all-files` before submitting a change. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete development workflow.
 
 ## 🌌 Ansible Galaxy
 
