@@ -10,7 +10,7 @@
 # - Once applied during first run setup, the password is removed from this file, encrypted and stored to a safer location to be used by dietpi-software only.
 # - WARN: The default SSH server Dropbear does not support passwords over 100 bytes. Certain special characters, and such with accents, take 2 bytes.
 # - WARN: We cannot guarantee that all software options can handle special characters like $"|\.
-AUTO_SETUP_GLOBAL_PASSWORD=dietpi
+AUTO_SETUP_GLOBAL_PASSWORD=dietpi1
 
 AUTO_SETUP_ACCEPT_LICENSE=1
 
@@ -57,7 +57,7 @@ AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=1
 
 ##### Misc options #####
 # Swap space size to generate: 0 => disable | 1 => auto | 2 and up => size in MiB
-AUTO_SETUP_SWAPFILE_SIZE=1
+AUTO_SETUP_SWAPFILE_SIZE=0
 # Swap space location: "zram" => swap space on /dev/zram0 (auto-size = 50% of RAM size) | /path/to/file => swap file at location (auto-size = 2 GiB minus RAM size)
 AUTO_SETUP_SWAPFILE_LOCATION=/var/swap
 
@@ -139,7 +139,7 @@ AUTO_SETUP_AUTOMATED=1
 # - Add as many software IDs as you wish, separated by space.
 # - DietPi will automatically install all dependencies, like ALSA/X11 for desktops, a webserver for web applications etc.
 # - E.g. the following (without the leading "#") will install the LXDE desktop, the TigerVNC server and the Kodi media centre automatically on first boot:
-AUTO_SETUP_INSTALL_SOFTWARE_ID=0 1 4 69 105 110 17 130
+AUTO_SETUP_INSTALL_SOFTWARE_ID=0 1 4 17 58 69 105 110 130
 
 #------------------------------------------------------------------------------------------------------
 ##### Misc DietPi program settings #####
